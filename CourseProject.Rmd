@@ -1,0 +1,143 @@
+#Course Project - Machine Learning
+
+Author: 
+
+##Introduction
+
+The subject of thi report is the analysis of the output from activity measuring devices - data contains 160 variables - measurements taken from 6 participants. The aim of the report to predict the manner in which they did the exercise included in the "classe" variable. "clasee" variable contains qualitative measure of the quality of performance of the exercise. It could be performed in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E) (information on the basis of http://groupware.les.inf.puc-rio.br/har). Report includes three different parts - reading and preprocessing data, exploratory data analysis and building machine learning algorithm.
+
+##Reading and pre-processing data
+
+Below code reads data.
+
+```{r read data, echo=TRUE}
+setwd("C:/Users/Maciek/Desktop/Coursera/MachLear/CourseProject")
+train<-read.csv('pml-training.csv')
+test<-read.csv('pml-testing.csv')
+```
+
+Taking into account that number of variables is very large, we start with analysing whether there are any variables which contain only or mostly NAs - which might be quite common with these types of measurments.
+
+```{r NAs, echo=TRUE}
+#Below code calculates variables in case of which there are more than 90% of NAs
+#Such variable will be dropped in further analysis
+
+nas<-sapply(train,function(x) (sum(is.na(x))/length(x)>0.9))
+drop<-names(nas[which(nas)])
+train<-train[,-which(names(train) %in% drop)]
+test<-test[,-which(names(test) %in% drop)]
+
+#now we are cheking whether some of the columns might have very low variability 
+#and thus be useless in further analysis
+library(caret)
+nzv<-nearZeroVar(train,saveMetrics=TRUE)
+nzv
+drop2<-row.names(nzv[nzv$nzv==TRUE,])
+
+#we are dropping also near zero variables
+
+train<-train[,-which(names(train) %in% drop2)]
+test<-test[,-which(names(test) %in% drop2)]
+
+#we drop also X variable which is an identification variable causing problems in the course of modelling
+
+train<-train[,-1]
+test<-test[,-1]
+
+```
+
+Inspecting the dataset, after above transformation of data shows, that in the remaining variables (59 variables remained in the dataset) there are no NAs. Thus, there is no need to impute missing values. 
+
+##Exploratory data analysis
+
+After pre-processing the dataset, we will perform exploratory data analysis on the training set.
+
+```{r Exploratory data analysis, echo=TRUE}
+#summary of data
+summary(train) 
+```
+
+##Machine Learning Algorithms
+
+For analysis of the data we will use random trees algorithm, mainly because it is easier to interpret than most of the other algorithms. Another advantage is that the random trees are nice to visualize. Both of these advantages will allow us to see what really impacts quality of the exercises. We are using all of the variables in the dataset as predictors.
+
+Priot to modelling we split training dataset into training and validation set - in order to assess the accuracy of classification on the validation set.
+
+```{r train set split, echo=TRUE}
+set.seed(3456)
+inTrain<-createDataPartition(y=train$classe,p=0.3,list=FALSE)
+#0.3 for training set is used in order to speed up calculations
+training<-train[inTrain,]
+validation<-train[-inTrain,]
+```
+
+
+```{r modelling, echo=TRUE}
+
+#model training
+library(rpart)
+model<-train(classe~.,data=training,method="rpart")
+model$finalModel
+
+#visualization of tree model
+
+library(rattle)
+library(rpart.plot)
+fancyRpartPlot(model$finalModel)
+
+```
+
+After training model we will check what are the results of the classification performed on the validation set. 
+
+```{r prediction, echo=TRUE}
+
+#prediction
+
+predicted<-predict(model,newdata=validation)
+confusionMatrix(predicted,validation$classe)
+```
+
+Results are not satisfactory because - accuracy is only 49% on the validation set. Main reason behind such low accuracy is that the tree model does not have any output as D. Thus, automatically all elements belonging to this class are misclassified.
+
+We will check whether using different model i.e. random forests will help us improve accuracy.
+
+```{r modelling - RF, echo=TRUE}
+
+#model training
+library(randomForest)
+model2<-train(classe~.,data=training,trControl=trainControl(method="cv",number=4),method="rf",prox=TRUE,allowParallel=TRUE)
+model2
+```
+
+Now we will perform prediction using random forests model.
+
+```{r prediction - RF, echo=TRUE}
+
+#prediction
+predictedRF<-predict(model2,newdata=validation)
+confusionMatrix(predictedRF,validation$classe)
+```
+
+Random Forests algorithm brings us large improvement - the accuracy increases to 99% on the validation set which is a result deemed as satisfactory.
+
+Thus in the prediction quiz we will use model2.
+
+```{r final prediction, echo=TRUE}
+
+#prediction
+predictedtest<-predict(model2,newdata=test)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
